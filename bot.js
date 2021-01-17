@@ -1,10 +1,6 @@
 const Discord = require('discord.js');
 require('dotenv').config();
 
-/* 
-  https://gist.github.com/advaith1/287e69c3347ef5165c0dbde00aa305d2
-*/
-
 // creating new client on startup
 const client = new Discord.Client();
 const client_token = process.env.API_KEY;
@@ -14,7 +10,11 @@ const private_channel_lookup_keyword = "private voice";
 // attach event listener for the ready event
 client.on("ready", () => {
   console.log("Client is ready!");
-  client.api.applications(client.user.id).guilds("800393416738603018").commands.post({data: {
+  /* 
+    Please see link below for global vs guild-specific commands and how they differ:
+    https://gist.github.com/advaith1/287e69c3347ef5165c0dbde00aa305d2#global-commands
+  */
+  client.api.applications(client.user.id).commands.post({data: {
     name: 'new-temp-voice',
     description: 'Create a new channel temporarily available for provided amount of members',
     options: [
