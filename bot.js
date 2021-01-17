@@ -6,6 +6,7 @@ const client = new Discord.Client();
 const client_token = process.env.API_KEY;
 const default_private_channel_name = "Private voice channels";
 const private_channel_lookup_keyword = "private voice";
+const temp_channel_clear_interval = 15 * 60 * 1000 // Every 15 minutes
 
 // attach event listener for the ready event
 client.on("ready", () => {
@@ -55,13 +56,14 @@ client.on("ready", () => {
       }
     ]
   }});
+  setInterval(periodic_clear_channels, temp_channel_clear_interval);
 });
 
 // receiving new interactions
 client.ws.on('INTERACTION_CREATE', async interaction => {
   if (interaction.data.name !== "new-temp-voice") return;
   if (interaction.data.options[0].name === "clear") {
-    clear_temp_channel(interaction.guild_id, interaction.channel_id, interaction.member, interaction.id, interaction.token)
+    clear_temp_channel(interaction.guild_id, interaction.member, interaction.id, interaction.token)
   } else {
     generate_temp_channel(interaction.guild_id, interaction.channel_id, interaction.member, interaction.data.options[0].name, interaction.id, interaction.token);
   }
@@ -92,16 +94,25 @@ generate_temp_channel = (guild_id, channel_id, member, voice_slots, interaction_
       // Create a temp channel channel under existing private category
       channel_options.parent = private_category;
       guild.channels.create(channel_name, channel_options).then((channel) => {
-        // TODO: Move user to channel  
-        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within 10 seconds.**`}}})
+        // Move user to channel
+        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
+        guild.members.fetch(member.user.id).then((discord_member) => {
+          // If user is on another voice channel we can move them to new channel.
+          if (discord_member.voice.channelID) {discord_member.voice.setChannel(channel, channel_options.reason)};
+        });
       });
     } else {
       // Create private category and then proceed creating user's temp channel
       guild.channels.create(default_private_channel_name, {type: "category"}).then((private_parent_category) => {
         channel_options.parent = private_parent_category;
         guild.channels.create(channel_name, channel_options).then((channel) => {
-          // TODO: Move user to channel  
-          client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within 10 seconds.**`}}})
+          // Move user to channel  
+          console.dir(discord_member.voice)
+          client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
+          guild.members.fetch(member.user.id).then((discord_member) => {
+            // If user is on another voice channel we can move them to new channel.
+            if (discord_member.voice.channelID) {discord_member.voice.setChannel(channel, channel_options.reason)};
+          });
         });
       });
     };
@@ -109,7 +120,7 @@ generate_temp_channel = (guild_id, channel_id, member, voice_slots, interaction_
 };
 
 // clearing temporary voice channels
-clear_temp_channel = (guild_id, channel_id, member, interaction_id, interaction_token) => {
+clear_temp_channel = (guild_id, member, interaction_id, interaction_token) => {
   const channel_name = `${member.user.username}#${member.user.discriminator}'s channel`; 
 
   client.guilds.fetch(guild_id).then((guild) => {
@@ -119,8 +130,27 @@ clear_temp_channel = (guild_id, channel_id, member, interaction_id, interaction_
     // TODO notify members who got kicked from voice due channel removal??
 
     if (user_temp_channel) { user_temp_channel.delete() };
-    client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've cleared your existing private channel.`}}})
+    if (interaction_id && interaction_token) {
+      client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've cleared your existing private channel.`}}})
+    };
+    return;
   });
+};
+
+// periodic clearing for temporary voice channels
+periodic_clear_channels = () => {
+  let channels_cleared = 0;
+  const regex = /(.+?)#\d{4}/;
+  const temp_channels = client.channels.cache.filter(a => a.type === "voice" && a.name.match(regex));
+  if (Array.from(temp_channels).length === 0) { return };
+
+  // Clear every channel individually
+  temp_channels.forEach(cached_channel => {
+    const resolved_channel = client.channels.resolve(cached_channel);
+    if (Array.from(resolved_channel.members).length == 0) {resolved_channel.delete(); channels_cleared++};
+  });
+
+  console.log(`Periodic cleaner removed ${channels_cleared} temporary channels.`);
 };
 
 // login
