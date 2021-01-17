@@ -1,0 +1,29 @@
+{
+  "name": "flexiby-discord",
+  "version": "0.1.0",
+  "description": "Simple Discord bot that allows users to create private voice channels on the fly.",
+  "main": "bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "echo \"Start: Initializing Flexiby...\" && node bot.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/msyyn/flexiby-discord.git"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "flexiby"
+  ],
+  "author": "Mika Syynimaa",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/msyyn/flexiby-discord/issues"
+  },
+  "homepage": "https://github.com/msyyn/flexiby-discord#readme",
+  "dependencies": {
+    "discord.js": "^12.5.1",
+    "dotenv": "^8.2.0"
+  }
+}
