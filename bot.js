@@ -129,7 +129,7 @@ generate_temp_channel = async (guild_id, channel_id, member, voice_slots, intera
     };
   } catch (error){
     console.log(error);
-  }
+  };
 };
 
 // clearing temporary voice channels
