@@ -83,11 +83,15 @@ generate_temp_channel = async (guild_id, channel_id, member, voice_slots, intera
     const user_temp_channel = guild.channels.cache.find(a => a.type === "voice" && a.name == channel_name); // Search the guild for existing channel by the member.
 
     if (user_temp_channel) {
-      // TODO: Edit so that if new limit > current limit, update the limit of current channel.
-      // Otherwise ask user to clear current one first.
-      client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you already have a existing channel. Use \`/new-temp-voice clear\` to delete previous one and try again.`}}})
+      try {
+        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've updated your channel's user slots from ${user_temp_channel.userLimit} to ${voice_slots > 0 ? voice_slots : "unlimited (∞)"}.`}}})
+        await user_temp_channel.edit({ userLimit: voice_slots })
+      } catch (error) {
+        console.log(error)
+        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, something went wrong. Use \`/new-temp-voice clear\` to delete your existing channel and try again.`}}})
+      };
       return;
-    }
+    };
 
     // Check if there is "Private voice" category already
     const private_category = guild.channels.cache.find(a => a.type === "category" && a.name.toLowerCase().includes(private_channel_lookup_keyword));
@@ -98,7 +102,7 @@ generate_temp_channel = async (guild_id, channel_id, member, voice_slots, intera
         const channel = await guild.channels.create(channel_name, channel_options);
 
         // Notify user about creation
-        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
+        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "unlimited (∞)"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
 
         // If user is on another voice channel we can move them to new channel.
         const discord_member = await guild.members.fetch(member.user.id);
@@ -114,7 +118,7 @@ generate_temp_channel = async (guild_id, channel_id, member, voice_slots, intera
         const channel = await guild.channels.create(channel_name, channel_options);
 
         // Notify user about creation
-        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
+        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "unlimited (∞)"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
 
         // If user is on another voice channel we can move them to new channel.
         const discord_member = await guild.members.fetch(member.user.id);
