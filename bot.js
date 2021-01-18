@@ -1,5 +1,5 @@
 const Discord = require('discord.js');
-require('dotenv').config();
+require('dotenv').config(); // this allows reading of the .env file
 
 // creating new client on startup
 const client = new Discord.Client();
@@ -10,7 +10,7 @@ const temp_channel_clear_interval = 15 * 60 * 1000 // Every 15 minutes
 
 // attach event listener for the ready event
 client.on("ready", () => {
-  console.log("Client is ready!");
+  console.log(`Client is ready as ${client.user.tag}`);
   /* 
     Please see link below for global vs guild-specific commands and how they differ:
     https://gist.github.com/advaith1/287e69c3347ef5165c0dbde00aa305d2#global-commands
@@ -36,7 +36,7 @@ client.on("ready", () => {
       },
       {
         "name": "4",
-        "description": "Create channel with ten four (4) slots.",
+        "description": "Create channel with four (4) slots.",
         "type": 1
       },
       {
@@ -70,7 +70,7 @@ client.ws.on('INTERACTION_CREATE', async interaction => {
 });
 
 // generating temporary voice channels
-generate_temp_channel = (guild_id, channel_id, member, voice_slots, interaction_id, interaction_token) => {
+generate_temp_channel = async (guild_id, channel_id, member, voice_slots, interaction_id, interaction_token) => {
   const channel_name = `${member.user.username}#${member.user.discriminator}'s channel`; 
   let channel_options = {
     type: 'voice',
@@ -78,9 +78,10 @@ generate_temp_channel = (guild_id, channel_id, member, voice_slots, interaction_
     reason: `Requested by ${member.user.username}#${member.user.discriminator} (UID: ${member.user.id}) by using the interaction "new-temp-voice"`
   }
 
-  client.guilds.fetch(guild_id).then((guild) => {
-    // Search the guild for existing channels with USERNAME#DISC.
-    const user_temp_channel = guild.channels.cache.find(a => a.type === "voice" && a.name == channel_name);
+  try {
+    const guild = await client.guilds.fetch(guild_id);
+    const user_temp_channel = guild.channels.cache.find(a => a.type === "voice" && a.name == channel_name); // Search the guild for existing channel by the member.
+
     if (user_temp_channel) {
       // TODO: Edit so that if new limit > current limit, update the limit of current channel.
       // Otherwise ask user to clear current one first.
@@ -92,38 +93,47 @@ generate_temp_channel = (guild_id, channel_id, member, voice_slots, interaction_
     const private_category = guild.channels.cache.find(a => a.type === "category" && a.name.toLowerCase().includes(private_channel_lookup_keyword));
     if (private_category) {
       // Create a temp channel channel under existing private category
-      channel_options.parent = private_category;
-      guild.channels.create(channel_name, channel_options).then((channel) => {
-        // Move user to channel
+      try {
+        channel_options.parent = private_category;
+        const channel = await guild.channels.create(channel_name, channel_options);
+
+        // Notify user about creation
         client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
-        guild.members.fetch(member.user.id).then((discord_member) => {
-          // If user is on another voice channel we can move them to new channel.
-          if (discord_member.voice.channelID) {discord_member.voice.setChannel(channel, channel_options.reason)};
-        });
-      });
+
+        // If user is on another voice channel we can move them to new channel.
+        const discord_member = await guild.members.fetch(member.user.id);
+        if (discord_member.voice.channelID) {discord_member.voice.setChannel(channel, channel_options.reason)};
+      } catch(error) {
+        console.log(error)
+      };
     } else {
       // Create private category and then proceed creating user's temp channel
-      guild.channels.create(default_private_channel_name, {type: "category"}).then((private_parent_category) => {
+      try {
+        const private_parent_category = await guild.channels.create(default_private_channel_name, {type: "category"});
         channel_options.parent = private_parent_category;
-        guild.channels.create(channel_name, channel_options).then((channel) => {
-          // Move user to channel  
-          console.dir(discord_member.voice)
-          client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
-          guild.members.fetch(member.user.id).then((discord_member) => {
-            // If user is on another voice channel we can move them to new channel.
-            if (discord_member.voice.channelID) {discord_member.voice.setChannel(channel, channel_options.reason)};
-          });
-        });
-      });
+        const channel = await guild.channels.create(channel_name, channel_options);
+
+        // Notify user about creation
+        client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've created a new voice channel with ${voice_slots > 0 ? voice_slots : "∞"} user slots. **You will be automatically moved within few seconds if you're already in another voice channel.**`}}});
+
+        // If user is on another voice channel we can move them to new channel.
+        const discord_member = await guild.members.fetch(member.user.id);
+        if (discord_member.voice.channelID) {discord_member.voice.setChannel(channel, channel_options.reason)};
+      } catch (error) {
+        console.log(error);
+      }
     };
-  });
+  } catch (error){
+    console.log(error);
+  }
 };
 
 // clearing temporary voice channels
-clear_temp_channel = (guild_id, member, interaction_id, interaction_token) => {
-  const channel_name = `${member.user.username}#${member.user.discriminator}'s channel`; 
+clear_temp_channel = async (guild_id, member, interaction_id, interaction_token) => {
+  try {
+    const channel_name = `${member.user.username}#${member.user.discriminator}'s channel`; 
+    const guild = await client.guilds.fetch(guild_id);
 
-  client.guilds.fetch(guild_id).then((guild) => {
     // Search the guild for existing channels with USERNAME#DISC.
     const user_temp_channel = guild.channels.cache.find(a => a.type === "voice" && a.name == channel_name);
 
@@ -133,14 +143,15 @@ clear_temp_channel = (guild_id, member, interaction_id, interaction_token) => {
     if (interaction_id && interaction_token) {
       client.api.interactions(interaction_id, interaction_token).callback.post({data: {type: 4,  data: {content: `<@${member.user.id}>, you've cleared your existing private channel.`}}})
     };
-    return;
-  });
+  } catch (error) {
+    console.log(error);
+  };
 };
 
 // periodic clearing for temporary voice channels
 periodic_clear_channels = () => {
   let channels_cleared = 0;
-  const regex = /(.+?)#\d{4}/;
+  const regex = /(.+?)#\d{4}/; // This regex matches the Discord username#discriminator combination, e.g. mika#3184
   const temp_channels = client.channels.cache.filter(a => a.type === "voice" && a.name.match(regex));
   if (Array.from(temp_channels).length === 0) { return };
 
